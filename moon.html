@@ -5,100 +5,103 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Moon Phase</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Old+Mincho:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <style>
-  .panel { display: flex; align-items: center; gap: 18px; padding: 12px 20px; }
-  #sky { width: 120px; height: 120px; flex: none; filter: drop-shadow(0 0 10px rgba(223,227,211,.18)); }
-  .info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  #name { font-size: 30px; line-height: 1; }
-  .big { font-size: 22px; color: var(--blue); }
-  .small { font-size: 18px; color: var(--phos-dim); }
+  .panel { background: radial-gradient(ellipse at 50% 120%, #4b5d86 0%, transparent 60%), linear-gradient(180deg, #1e2a4d, #34436c);
+           color: #f6efd9; display: flex; align-items: center; gap: 16px; padding: 14px 20px; }
+  .panel::after { opacity: .28; mix-blend-mode: soft-light; }
+  #sky { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #moon { width: 120px; height: 120px; flex: none; position: relative; z-index: 1; }
+  .info { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .lab { font-size: 13px; opacity: .75; }
+  #name { font-family: "Zen Old Mincho", serif; font-weight: 700; font-size: 26px; line-height: 1.15; }
+  #illum { font-size: 16px; color: #e9dca8; }
+  #next { font-size: 14px; opacity: .8; }
+  .tw { animation: tw 3s ease-in-out infinite; }
+  @keyframes tw { 50% { opacity: .2; } }
+  .fly { animation: fly 9s ease-in-out infinite; }
+  @keyframes fly { 25% { transform: translate(14px,-10px); opacity: 1; } 50% { transform: translate(-6px,-18px); opacity: .2; } 75% { transform: translate(-14px,-4px); opacity: .9; } }
   @media (max-width: 380px) {
-    .panel { flex-direction: column; justify-content: center; gap: 10px; padding: 12px; text-align: center; }
+    .panel { flex-direction: column; justify-content: center; text-align: center; gap: 8px; }
     .info { align-items: center; }
-    #name { font-size: 26px; }
   }
 </style>
 </head>
 <body>
 <div class="panel">
-  <canvas id="sky" class="pixel" width="48" height="48"></canvas>
+  <svg id="sky" preserveAspectRatio="none"></svg>
+  <svg id="moon" viewBox="0 0 120 120">
+    <defs>
+      <radialGradient id="halo"><stop offset=".45" stop-color="#fff6d6" stop-opacity=".35"/><stop offset="1" stop-color="#fff6d6" stop-opacity="0"/></radialGradient>
+      <radialGradient id="lit" cx=".45" cy=".4"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#eadfb8"/></radialGradient>
+      <filter id="blur"><feGaussianBlur stdDeviation=".8"/></filter>
+      <clipPath id="litClip"><path id="litPath"/></clipPath>
+    </defs>
+    <circle cx="60" cy="60" r="58" fill="url(#halo)" id="haloC"/>
+    <circle cx="60" cy="60" r="38" fill="#3f4d73" stroke="#56658e" stroke-width="1"/>
+    <g filter="url(#blur)">
+      <path id="litShape" fill="url(#lit)"/>
+      <g clip-path="url(#litClip)" fill="#cbbd92" opacity=".45">
+        <circle cx="48" cy="48" r="7"/><circle cx="72" cy="66" r="9"/><circle cx="56" cy="78" r="4"/><circle cx="76" cy="42" r="4"/><circle cx="40" cy="68" r="5"/>
+      </g>
+    </g>
+  </svg>
   <div class="info">
-    <span class="label">tonight's moon · southern sky</span>
-    <span id="name" class="glow">—</span>
-    <span class="big" id="illum"></span>
-    <span class="small" id="next"></span>
+    <span class="lab">tonight's moon · southern sky</span>
+    <span id="name">—</span>
+    <span id="illum"></span>
+    <span id="next"></span>
   </div>
 </div>
 <script>
-const SYN = 29.530588853, DAY = 86400000;
-const REF = Date.UTC(2000, 0, 6, 18, 14);
-const SOUTH = true; // Melbourne: the lit side appears flipped vs. northern charts
-const N = 48, C = 24, R = 18;
-
-function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
-const rand = rng(42);
-const crater = Array.from({ length: N * N }, () => 0);
-for (let i = 0; i < 9; i++) { // soft maria / craters
-  const cx = C + (rand() - .5) * 26, cy = C + (rand() - .5) * 26, cr = 2 + rand() * 5;
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    const d = Math.hypot(x - cx, y - cy); if (d < cr) crater[y * N + x] = Math.max(crater[y * N + x], .35 * (1 - d / cr) + .12);
-  }
-}
-const stars = Array.from({ length: 14 }, () => {
-  let x, y; do { x = Math.floor(rand() * N); y = Math.floor(rand() * N); } while (Math.hypot(x - C, y - C) < R + 3);
-  return { x, y, p: rand() * 6 };
-});
-
+const SYN = 29.530588853, DAY = 86400000, REF = Date.UTC(2000, 0, 6, 18, 14);
+const SOUTH = true;
+const NS = "http://www.w3.org/2000/svg";
 function phase(now = Date.now()) {
   const age = (((now - REF) / DAY) % SYN + SYN) % SYN;
   const illum = (1 - Math.cos(2 * Math.PI * age / SYN)) / 2;
-  const names = [[1.84, "NEW MOON"], [5.53, "WAXING CRESCENT"], [9.22, "FIRST QUARTER"], [12.91, "WAXING GIBBOUS"],
-                 [16.61, "FULL MOON"], [20.30, "WANING GIBBOUS"], [23.99, "LAST QUARTER"], [27.68, "WANING CRESCENT"], [99, "NEW MOON"]];
-  const name = names.find(n => age < n[0])[1];
-  const toFull = ((SYN / 2 - age) + SYN) % SYN;
-  return { age, illum, name, toFull };
+  const names = [[1.84, "New Moon"], [5.53, "Waxing Crescent"], [9.22, "First Quarter"], [12.91, "Waxing Gibbous"],
+                 [16.61, "Full Moon"], [20.30, "Waning Gibbous"], [23.99, "Last Quarter"], [27.68, "Waning Crescent"], [99, "New Moon"]];
+  return { age, illum, name: names.find(n => age < n[0])[1], toFull: ((SYN / 2 - age) + SYN) % SYN };
 }
-
-const sky = document.getElementById("sky"), g = sky.getContext("2d");
-function render(t) {
-  const { age } = phase();
-  const k = Math.cos(2 * Math.PI * age / SYN), waxing = age < SYN / 2;
-  g.clearRect(0, 0, N, N);
-  for (const s of stars) {
-    const a = .25 + .6 * (0.5 + 0.5 * Math.sin(t / 700 + s.p));
-    g.fillStyle = `rgba(201,212,220,${a.toFixed(2)})`; g.fillRect(s.x, s.y, 1, 1);
-  }
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    const nx = (x + .5 - C) / R, ny = (y + .5 - C) / R;
-    if (nx * nx + ny * ny > 1) continue;
-    const half = Math.sqrt(1 - ny * ny);
-    let px = SOUTH ? -nx : nx;           // flip for the southern hemisphere view
-    const lit = waxing ? px > k * half : px < -k * half;
-    const edge = waxing ? px - k * half : -k * half - px;
-    const dither = Math.abs(edge) < .08 && ((x + y) & 1); // soft pixel terminator
-    const cr = crater[y * N + x];
-    if (lit && !dither) {
-      const v = 1 - cr;
-      g.fillStyle = `rgb(${Math.round(223 * v)},${Math.round(227 * v)},${Math.round(211 * v)})`;
-    } else {
-      g.fillStyle = dither ? "#4a5149" : `rgba(70,80,74,${(.55 - cr * .4).toFixed(2)})`; // earthshine
-    }
-    g.fillRect(x, y, 1, 1);
-  }
-  requestAnimationFrame(render);
+function litPath(age) {
+  const R = 38, cx = 60, cy = 60, k = Math.cos(2 * Math.PI * age / SYN), rx = Math.abs(k) * R;
+  const waxing = age < SYN / 2;
+  let right = waxing; if (SOUTH) right = !right;       // which side is lit
+  const crescent = k > 0;                               // less than half lit
+  const top = `${cx},${cy - R}`, bot = `${cx},${cy + R}`;
+  const outer = right ? 1 : 0;                          // top → bottom along lit edge
+  const term = right ? (crescent ? 0 : 1) : (crescent ? 1 : 0);
+  return `M${top} A${R},${R} 0 0 ${outer} ${bot} A${rx.toFixed(2)},${R} 0 0 ${term} ${top}Z`;
 }
-function text() {
-  const p = phase();
+function render() {
+  const p = phase(), d = litPath(p.age);
+  litShape.setAttribute("d", d); litPath_.setAttribute("d", d);
+  haloC.setAttribute("opacity", (.3 + p.illum * .7).toFixed(2));
   document.getElementById("name").textContent = p.name;
-  document.getElementById("illum").textContent = `${Math.round(p.illum * 100)}% ILLUMINATED`;
-  const d = p.toFull;
-  document.getElementById("next").textContent =
-    p.name === "FULL MOON" ? "FULL MOON IS UP — LOOK OUTSIDE" : `NEXT FULL MOON IN ${d < 1.5 ? "1 DAY" : Math.round(d) + " DAYS"}`;
+  illum.textContent = `${Math.round(p.illum * 100)}% lit`;
+  next.textContent = p.name === "Full Moon" ? "It's full tonight — go look outside" :
+    `Full moon in ${p.toFull < 1.5 ? "1 day" : Math.round(p.toFull) + " days"}`;
 }
-text(); setInterval(text, 60000);
-requestAnimationFrame(render);
+const litPath_ = document.getElementById("litPath");
+const sky = document.getElementById("sky");
+function stars() {
+  const w = sky.clientWidth, h = sky.clientHeight; sky.setAttribute("viewBox", `0 0 ${w} ${h}`); sky.innerHTML = "";
+  for (let i = 0; i < Math.floor(w * h / 1400); i++) {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", Math.random() * w); c.setAttribute("cy", Math.random() * h); c.setAttribute("r", Math.random() * .9 + .4);
+    c.setAttribute("fill", "#fff8de"); c.setAttribute("class", "tw"); c.style.animationDelay = -Math.random() * 3 + "s"; c.style.animationDuration = 2 + Math.random() * 3 + "s";
+    sky.appendChild(c);
+  }
+  for (let i = 0; i < 5; i++) { // fireflies
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", Math.random() * w); c.setAttribute("cy", h * (.6 + Math.random() * .35)); c.setAttribute("r", 1.8);
+    c.setAttribute("fill", "#f5e58c"); c.setAttribute("class", "fly"); c.style.filter = "drop-shadow(0 0 3px #f5e58c)";
+    c.style.animationDelay = -Math.random() * 9 + "s"; sky.appendChild(c);
+  }
+}
+render(); stars(); setInterval(render, 60000); addEventListener("resize", stars);
 </script>
 </body>
 </html>

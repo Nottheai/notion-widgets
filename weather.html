@@ -5,124 +5,98 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Melbourne Weather</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Old+Mincho:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <style>
-  .panel { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 12px 18px; }
-  .now { display: flex; align-items: center; gap: 16px; }
-  #bigIcon { width: 72px; height: 72px; animation: bob 3s ease-in-out infinite; }
-  @keyframes bob { 50% { transform: translateY(-3px); } }
-  .temp { font-size: 58px; line-height: .9; }
-  .cond { font-size: 24px; color: var(--blue); }
-  .meta { font-size: 18px; color: var(--phos-dim); }
-  .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 16px; }
-  .days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; border-top: 1px dashed var(--edge); padding-top: 10px; }
-  .day { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 18px; }
-  .day canvas { width: 30px; height: 30px; }
-  .day .lo { color: var(--phos-dim); }
-  .day .name { font-family: "Press Start 2P", monospace; font-size: 8px; color: var(--phos-dim); }
-  #status { color: var(--amber); }
+  .panel { display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 14px 20px; }
+  .head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 14px; font-size: 14px; }
+  .now { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  #big { width: 84px; height: 66px; flex: none; }
+  .temp { font-family: "Zen Old Mincho", serif; font-weight: 700; font-size: 48px; line-height: 1; }
+  .cond { font-size: 18px; color: var(--ink-soft); }
+  .meta { margin-left: auto; text-align: right; font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
+  .days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding-top: 10px;
+          border-top: 1.5px dashed rgba(138,125,107,.45); }
+  .day { display: flex; flex-direction: column; align-items: center; font-size: 14px; }
+  .day svg { width: 40px; height: 30px; }
+  .day .lo { color: var(--ink-soft); }
+  .day .name { font-size: 12px; color: var(--ink-soft); }
+  .drop { animation: fall 1.1s linear infinite; }
+  @keyframes fall { from { transform: translateY(-4px); opacity: 0; } 30% { opacity: 1; } to { transform: translateY(10px); opacity: 0; } }
+  .rays { transform-origin: 50px 38px; animation: spin 30s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .float { animation: float 4s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateX(3px); } }
+  .fogline { animation: float 5s ease-in-out infinite; }
 </style>
 </head>
 <body>
 <div class="panel">
-  <div class="head">
-    <span class="label">Melbourne · weather</span>
-    <span class="label" id="status">tuning…</span>
-  </div>
+  <div class="head"><span>☁ Melbourne weather</span><span class="soft" id="status">looking at the sky…</span></div>
   <div class="now">
-    <canvas id="bigIcon" class="pixel" width="12" height="12"></canvas>
-    <div>
-      <div class="temp glow"><span id="t">--</span>°</div>
-      <div class="cond" id="cond">&nbsp;</div>
-    </div>
-    <div class="meta" id="meta" style="margin-left:auto;text-align:right"></div>
+    <svg id="big" viewBox="0 0 100 76"></svg>
+    <div><div class="temp"><span id="t">--</span>°</div><div class="cond" id="cond">&nbsp;</div></div>
+    <div class="meta" id="meta"></div>
   </div>
   <div class="days" id="days"></div>
 </div>
 <script>
 const LAT = -37.8136, LON = 144.9631, TZ = "Australia/Melbourne";
-const COLORS = { S:"#d6b77a", C:"#c9d4dc", c:"#8ea6b6", R:"#7fa6c9", Y:"#e3c56b", M:"#dfe3d3", F:"#8ea6b6", W:"#eef2f0" };
-const CLOUD_TOP = [
-  "............", ".....CCC....", "....CCCCC...", "..CCCCCCCC..",
-  ".CCCCCCCCCC.", ".CCCCCCCCCCC", ".cccccccccc."];
-const ICONS = {
-  sun: ["............", ".....SS.....", "..S......S..", "....SSSS....", "...SSSSSS...", ".S.SSSSSS.S.",
-        ".S.SSSSSS.S.", "...SSSSSS...", "....SSSS....", "..S......S..", ".....SS.....", "............"],
-  moon: ["............", ".....MMMM...", "...MMM......", "..MMM.......", "..MM........", ".MMM........",
-         ".MMM........", ".MMMM......M", "..MMMMM..MM.", "...MMMMMMM..", ".....MMM....", "............"],
-  partly: ["..S.........", "....SSS.....", ".S.SSSSS....", "..SSSSSS....", "..SSSCCC....", "..SSCCCCC...",
-           "...CCCCCCC..", "..CCCCCCCCC.", ".CCCCCCCCCCC", ".ccccccccccc", "............", "............"],
-  cloud: ["............", "............", "............", ".....CCC....", "....CCCCC...", "..CCCCCCCC..",
-          ".CCCCCCCCCC.", ".CCCCCCCCCCC", ".cccccccccc.", "............", "............", "............"],
-  rain: [...CLOUD_TOP, "............", "..R...R...R.", ".R...R...R..", "............", "...R...R...."],
-  snow: [...CLOUD_TOP, "............", "..W...W...W.", "............", "....W...W...", "............"],
-  storm: [...CLOUD_TOP.slice(0, 6), ".ccccYYcccc.", ".....YY.....", "....YYYY....", "......YY....", ".....YY.....", "....Y......."],
-  fog: ["............", "............", ".FFFFFFFF...", "............", "...FFFFFFFFF", "............",
-        ".FFFFFFFFFF.", "............", "..FFFFFFF...", "............", "............", "............"],
+const cloud = (x = 0, y = 0, s = 1, fill = "#fffaf0", stroke = "#b9ad98") =>
+  `<g transform="translate(${x},${y}) scale(${s})" class="float"><path d="M22 54 a14 14 0 0 1 3-27 a18 18 0 0 1 34-6 a14 14 0 0 1 23 10 a12 12 0 0 1 -2 23 Z"
+    fill="${fill}" stroke="${stroke}" stroke-width="1.6" stroke-linejoin="round"/></g>`;
+const sun = (x = 50, y = 38, r = 15) =>
+  `<g><circle cx="${x}" cy="${y}" r="${r + 10}" fill="#f6d38a" opacity=".25"/>
+   <g class="rays" style="transform-origin:${x}px ${y}px">${[...Array(8)].map((_, i) => {
+     const a = i * Math.PI / 4, x1 = x + Math.cos(a) * (r + 5), y1 = y + Math.sin(a) * (r + 5), x2 = x + Math.cos(a) * (r + 11), y2 = y + Math.sin(a) * (r + 11);
+     return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#e9b04f" stroke-width="3" stroke-linecap="round"/>`; }).join("")}</g>
+   <circle cx="${x}" cy="${y}" r="${r}" fill="#f2c46d" stroke="#e0a64a" stroke-width="1.5"/></g>`;
+const moon = () => `<g><circle cx="50" cy="36" r="24" fill="#f3e7b8" opacity=".25"/><path d="M58 16 a20 20 0 1 0 8 30 a16 16 0 1 1 -8 -30Z" fill="#f3e7b8" stroke="#cdbb86" stroke-width="1.5"/></g>`;
+const drops = (color = "#7fa6c9") => [18, 38, 58, 78].map((x, i) =>
+  `<line class="drop" style="animation-delay:${-i * .27}s" x1="${x + 4}" y1="60" x2="${x}" y2="70" stroke="${color}" stroke-width="2.6" stroke-linecap="round"/>`).join("");
+const flakes = () => [22, 44, 66].map((x, i) => `<circle class="drop" style="animation-delay:${-i * .37}s" cx="${x + 6}" cy="64" r="2.6" fill="#ffffff" stroke="#b9c7d3"/>`).join("");
+const ICON = {
+  sun: () => sun(),
+  moon: () => moon(),
+  partly: () => sun(36, 30, 13) + cloud(14, 14, .9),
+  cloud: () => cloud(6, 4, 1.05, "#f4efe6", "#a9a08f") ,
+  rain: () => cloud(6, -4, 1, "#e9e6df", "#9f9a8e") + drops(),
+  snow: () => cloud(6, -4, 1) + flakes(),
+  storm: () => cloud(6, -4, 1, "#d9d6d0", "#8f8a80") + `<path d="M50 52 l-8 12 h8 l-5 11 l14-16 h-8 l5-7Z" fill="#f2c46d" stroke="#d99a3a" stroke-width="1.2"/>` + drops("#8aa3bd"),
+  fog: () => [24, 38, 52].map((y, i) => `<line class="fogline" style="animation-delay:${-i}s" x1="${14 + i * 6}" y1="${y}" x2="${86 - i * 4}" y2="${y}" stroke="#b5ad9e" stroke-width="5" stroke-linecap="round"/>`).join(""),
 };
 function codeInfo(code, isDay = 1) {
-  if (code === 0) return [isDay ? "sun" : "moon", "CLEAR"];
-  if (code <= 2) return [isDay ? "partly" : "moon", "PARTLY CLOUDY"];
-  if (code === 3) return ["cloud", "OVERCAST"];
-  if (code <= 48) return ["fog", "FOG"];
-  if (code <= 57) return ["rain", "DRIZZLE"];
-  if (code <= 67) return ["rain", "RAIN"];
-  if (code <= 77) return ["snow", "SNOW"];
-  if (code <= 82) return ["rain", "SHOWERS"];
-  if (code <= 86) return ["snow", "SNOW SHOWERS"];
-  return ["storm", "THUNDERSTORM"];
+  if (code === 0) return [isDay ? "sun" : "moon", "Clear skies"];
+  if (code <= 2) return [isDay ? "partly" : "moon", "A few clouds"];
+  if (code === 3) return ["cloud", "Overcast"];
+  if (code <= 48) return ["fog", "Misty"];
+  if (code <= 57) return ["rain", "Light drizzle"];
+  if (code <= 67) return ["rain", "Rain"];
+  if (code <= 77) return ["snow", "Snow"];
+  if (code <= 82) return ["rain", "Showers"];
+  if (code <= 86) return ["snow", "Snow showers"];
+  return ["storm", "Thunderstorm"];
 }
-function draw(canvas, name, frame = 0) {
-  const g = canvas.getContext("2d"), grid = ICONS[name];
-  g.clearRect(0, 0, 12, 12);
-  grid.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch === ".") return;
-    let yy = y;
-    if (ch === "R" || ch === "W") yy = 7 + ((y - 7 + frame) % 5);
-    if (ch === "S" && (x === 1 || x === 10 || y === 2 || y === 9) && frame % 2) return; // ray twinkle
-    g.fillStyle = COLORS[ch]; g.fillRect(x, yy, 1, 1);
-  }));
-}
-const big = document.getElementById("bigIcon");
-let bigName = "cloud", frame = 0;
-setInterval(() => { frame++; draw(big, bigName, frame); }, 450);
-
 async function load() {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
     `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day` +
-    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
-    `&timezone=${encodeURIComponent(TZ)}&forecast_days=5`;
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=${encodeURIComponent(TZ)}&forecast_days=5`;
   try {
     const r = await fetch(url); if (!r.ok) throw 0;
-    const d = await r.json(), c = d.current;
-    const [icon, label] = codeInfo(c.weather_code, c.is_day);
-    bigName = icon; draw(big, icon, frame);
-    document.getElementById("t").textContent = Math.round(c.temperature_2m);
-    document.getElementById("cond").textContent = label;
-    document.getElementById("meta").innerHTML =
-      `FEELS ${Math.round(c.apparent_temperature)}°<br>HUM ${c.relative_humidity_2m}%<br>WIND ${Math.round(c.wind_speed_10m)} KM/H`;
-    const days = document.getElementById("days"); days.innerHTML = "";
-    d.daily.time.forEach((iso, i) => {
-      const name = i === 0 ? "TODAY" : new Date(iso + "T12:00:00").toLocaleDateString("en-AU", { weekday: "short" }).toUpperCase();
-      const el = document.createElement("div"); el.className = "day";
-      const cv = document.createElement("canvas"); cv.width = cv.height = 12; cv.className = "pixel";
-      draw(cv, codeInfo(d.daily.weather_code[i])[0]);
-      el.innerHTML = `<span class="name">${name}</span>`;
-      el.appendChild(cv);
-      el.insertAdjacentHTML("beforeend",
-        `<span>${Math.round(d.daily.temperature_2m_max[i])}° <span class="lo">${Math.round(d.daily.temperature_2m_min[i])}°</span></span>`);
-      days.appendChild(el);
-    });
-    const t = new Date().toLocaleTimeString("en-AU", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-    document.getElementById("status").textContent = `upd ${t}`;
-  } catch (e) {
-    document.getElementById("status").textContent = "no signal";
-    setTimeout(load, 60000);
-  }
+    const d = await r.json(), c = d.current, [icon, label] = codeInfo(c.weather_code, c.is_day);
+    big.innerHTML = ICON[icon]();
+    t.textContent = Math.round(c.temperature_2m);
+    cond.textContent = label;
+    meta.innerHTML = `feels ${Math.round(c.apparent_temperature)}°<br>humidity ${c.relative_humidity_2m}%<br>wind ${Math.round(c.wind_speed_10m)} km/h`;
+    days.innerHTML = d.daily.time.map((iso, i) => {
+      const name = i === 0 ? "Today" : new Date(iso + "T12:00:00").toLocaleDateString("en-AU", { weekday: "short" });
+      return `<div class="day"><span class="name">${name}</span><svg viewBox="0 0 100 76">${ICON[codeInfo(d.daily.weather_code[i])[0]]()}</svg>
+        <span>${Math.round(d.daily.temperature_2m_max[i])}° <span class="lo">${Math.round(d.daily.temperature_2m_min[i])}°</span></span></div>`;
+    }).join("");
+    document.getElementById("status").textContent = "updated " + new Date().toLocaleTimeString("en-AU", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  } catch (e) { document.getElementById("status").textContent = "the sky is shy… retrying"; setTimeout(load, 60000); }
 }
-load();
-setInterval(load, 15 * 60 * 1000);
+load(); setInterval(load, 15 * 60 * 1000);
 </script>
 </body>
 </html>
