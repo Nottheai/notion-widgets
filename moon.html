@@ -14,6 +14,11 @@
   #name { font-size: 30px; line-height: 1; }
   .big { font-size: 22px; color: var(--blue); }
   .small { font-size: 18px; color: var(--phos-dim); }
+  @media (max-width: 380px) {
+    .panel { flex-direction: column; justify-content: center; gap: 10px; padding: 12px; text-align: center; }
+    .info { align-items: center; }
+    #name { font-size: 26px; }
+  }
 </style>
 </head>
 <body>
