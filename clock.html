@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Melbourne Clock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; }
+  svg#face { width: min(100%, 520px); height: auto; max-height: 70%; filter: drop-shadow(0 0 6px rgba(169,199,161,.35)); }
+  .seg { fill: var(--ghost); transition: fill .08s; }
+  .seg.on { fill: var(--phos); }
+  .seg.sec.on { fill: var(--blue); }
+  .dot { fill: var(--phos); }
+  .row { display: flex; gap: 14px; align-items: baseline; }
+  #date { font-size: 22px; letter-spacing: 2px; }
+  .tag { color: var(--amber); }
+</style>
+</head>
+<body>
+<div class="panel">
+  <svg id="face" viewBox="0 0 330 80" aria-label="Melbourne time"></svg>
+  <div class="row">
+    <span id="date" class="glow">--- -- --- ----</span>
+  </div>
+  <div class="label">Melbourne · <span id="tz" class="tag">AEDT</span></div>
+</div>
+<script>
+const TZ = "Australia/Melbourne";
+const NS = "http://www.w3.org/2000/svg";
+const MAP = { 0:"abcdef",1:"bc",2:"abged",3:"abgcd",4:"fgbc",5:"afgcd",6:"afgedc",7:"abc",8:"abcdefg",9:"abcdfg" };
+
+function segPolys(w, h, t) {
+  const g = 1.2, s = t / 2;
+  const H = (y, x0, x1) => [[x0,y],[x0+s,y-s],[x1-s,y-s],[x1,y],[x1-s,y+s],[x0+s,y+s]];
+  const V = (x, y0, y1) => [[x,y0],[x+s,y0+s],[x+s,y1-s],[x,y1],[x-s,y1-s],[x-s,y0+s]];
+  return {
+    a: H(s, s+g, w-s-g), g: H(h/2, s+g, w-s-g), d: H(h-s, s+g, w-s-g),
+    f: V(s, s+g, h/2-g), b: V(w-s, s+g, h/2-g),
+    e: V(s, h/2+g, h-s-g), c: V(w-s, h/2+g, h-s-g),
+  };
+}
+function makeDigit(x, y, w, h, t, cls) {
+  const grp = document.createElementNS(NS, "g");
+  grp.setAttribute("transform", `translate(${x},${y}) skewX(-7)`);
+  const polys = segPolys(w, h, t), els = {};
+  for (const k in polys) {
+    const p = document.createElementNS(NS, "polygon");
+    p.setAttribute("points", polys[k].map(q => q.join(",")).join(" "));
+    p.setAttribute("class", "seg " + cls);
+    grp.appendChild(p); els[k] = p;
+  }
+  face.appendChild(grp);
+  return n => { const on = MAP[n]; for (const k in els) els[k].classList.toggle("on", on.includes(k)); };
+}
+const face = document.getElementById("face");
+const W = 44, Hh = 74, T = 9;
+const digits = [
+  makeDigit(8, 3, W, Hh, T, "main"), makeDigit(60, 3, W, Hh, T, "main"),
+  makeDigit(134, 3, W, Hh, T, "main"), makeDigit(186, 3, W, Hh, T, "main"),
+  makeDigit(254, 37, 26, 40, 6, "sec"), makeDigit(286, 37, 26, 40, 6, "sec"),
+];
+const dots = [];
+for (const cy of [26, 54]) {
+  const r = document.createElementNS(NS, "rect");
+  r.setAttribute("x", 114); r.setAttribute("y", cy - 5);
+  r.setAttribute("width", 10); r.setAttribute("height", 10);
+  r.setAttribute("class", "dot"); face.appendChild(r); dots.push(r);
+}
+
+const partsFmt = new Intl.DateTimeFormat("en-AU", { timeZone: TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+const dateFmt = new Intl.DateTimeFormat("en-AU", { timeZone: TZ, weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+const tzFmt = new Intl.DateTimeFormat("en-AU", { timeZone: TZ, timeZoneName: "short" });
+
+function tick() {
+  const now = new Date();
+  const p = Object.fromEntries(partsFmt.formatToParts(now).map(x => [x.type, x.value]));
+  const s = p.hour + p.minute + p.second;
+  for (let i = 0; i < 6; i++) digits[i](+s[i]);
+  const blink = now.getMilliseconds() < 500;
+  dots.forEach(d => d.style.opacity = blink ? 1 : .15);
+  const d = Object.fromEntries(dateFmt.formatToParts(now).map(x => [x.type, x.value]));
+  document.getElementById("date").textContent = `${d.weekday} · ${d.day} ${d.month} ${d.year}`.toUpperCase();
+  const tz = tzFmt.formatToParts(now).find(x => x.type === "timeZoneName");
+  if (tz) document.getElementById("tz").textContent = tz.value.replace("GMT+11", "AEDT").replace("GMT+10", "AEST");
+}
+tick();
+setInterval(tick, 250);
+</script>
+</body>
+</html>

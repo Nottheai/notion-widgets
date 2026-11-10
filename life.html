@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Life Progress</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .panel { display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 10px 18px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  #pct { font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .bar { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 3px; height: 22px;
+         padding: 3px; border: 2px solid var(--phos-dim); border-radius: 3px; }
+  .blk { background: var(--ghost); }
+  .blk.on { background: var(--phos); box-shadow: 0 0 6px rgba(169,199,161,.35); }
+  .blk.now { background: var(--amber); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .foot { display: flex; justify-content: space-between; font-size: 18px; color: var(--phos-dim); }
+  .cursor { animation: blink 1s steps(2) infinite; }
+</style>
+</head>
+<body>
+<div class="panel">
+  <div class="top">
+    <span class="label">life.exe loading<span class="cursor">_</span></span>
+    <span id="pct" class="glow">--.------%</span>
+  </div>
+  <div class="bar" id="bar"></div>
+  <div class="foot"><span id="left"></span><span id="right"></span></div>
+</div>
+<script>
+const q = new URLSearchParams(location.search);
+const born = q.get("born"), years = parseFloat(q.get("years") || "90");
+const DAY = 86400000;
+const bar = document.getElementById("bar");
+function blocks() { return Math.max(20, Math.min(60, Math.floor(innerWidth / 16))); }
+let n = 0, els = [];
+function build() {
+  const want = blocks(); if (want === n) return;
+  n = want; bar.style.setProperty("--n", n); bar.innerHTML = "";
+  els = Array.from({ length: n }, () => bar.appendChild(Object.assign(document.createElement("div"), { className: "blk" })));
+}
+const start = born ? new Date(born + "T00:00:00").getTime() : NaN;
+const end = new Date(start); if (!isNaN(start)) end.setFullYear(end.getFullYear() + Math.floor(years));
+const endMs = end.getTime() + (years % 1) * 365.2425 * DAY;
+function tick() {
+  build();
+  if (isNaN(start)) {
+    document.getElementById("pct").textContent = "SET BIRTHDAY";
+    document.getElementById("left").textContent = "add ?born=YYYY-MM-DD to the link";
+    return;
+  }
+  const now = Date.now(), f = Math.min(1, Math.max(0, (now - start) / (endMs - start)));
+  document.getElementById("pct").textContent = (f * 100).toFixed(7) + "%";
+  const filled = Math.floor(f * n);
+  els.forEach((e, i) => { e.className = "blk" + (i < filled ? " on" : i === filled ? " now" : ""); });
+  const days = Math.floor((now - start) / DAY);
+  const age = (now - start) / (365.2425 * DAY);
+  document.getElementById("left").textContent = `DAY ${days.toLocaleString("en-AU")} · AGE ${age.toFixed(2)}`;
+  document.getElementById("right").textContent = `MAKE TODAY COUNT`;
+}
+tick(); setInterval(tick, 100);
+addEventListener("resize", tick);
+</script>
+</body>
+</html>

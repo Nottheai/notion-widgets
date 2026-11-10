@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Melbourne Weather</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .panel { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 12px 18px; }
+  .now { display: flex; align-items: center; gap: 16px; }
+  #bigIcon { width: 72px; height: 72px; animation: bob 3s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-3px); } }
+  .temp { font-size: 58px; line-height: .9; }
+  .cond { font-size: 24px; color: var(--blue); }
+  .meta { font-size: 18px; color: var(--phos-dim); }
+  .head { display: flex; justify-content: space-between; align-items: center; }
+  .days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; border-top: 1px dashed var(--edge); padding-top: 10px; }
+  .day { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 18px; }
+  .day canvas { width: 30px; height: 30px; }
+  .day .lo { color: var(--phos-dim); }
+  .day .name { font-family: "Press Start 2P", monospace; font-size: 8px; color: var(--phos-dim); }
+  #status { color: var(--amber); }
+</style>
+</head>
+<body>
+<div class="panel">
+  <div class="head">
+    <span class="label">Melbourne · weather</span>
+    <span class="label" id="status">tuning…</span>
+  </div>
+  <div class="now">
+    <canvas id="bigIcon" class="pixel" width="12" height="12"></canvas>
+    <div>
+      <div class="temp glow"><span id="t">--</span>°</div>
+      <div class="cond" id="cond">&nbsp;</div>
+    </div>
+    <div class="meta" id="meta" style="margin-left:auto;text-align:right"></div>
+  </div>
+  <div class="days" id="days"></div>
+</div>
+<script>
+const LAT = -37.8136, LON = 144.9631, TZ = "Australia/Melbourne";
+const COLORS = { S:"#d6b77a", C:"#c9d4dc", c:"#8ea6b6", R:"#7fa6c9", Y:"#e3c56b", M:"#dfe3d3", F:"#8ea6b6", W:"#eef2f0" };
+const CLOUD_TOP = [
+  "............", ".....CCC....", "....CCCCC...", "..CCCCCCCC..",
+  ".CCCCCCCCCC.", ".CCCCCCCCCCC", ".cccccccccc."];
+const ICONS = {
+  sun: ["............", ".....SS.....", "..S......S..", "....SSSS....", "...SSSSSS...", ".S.SSSSSS.S.",
+        ".S.SSSSSS.S.", "...SSSSSS...", "....SSSS....", "..S......S..", ".....SS.....", "............"],
+  moon: ["............", ".....MMMM...", "...MMM......", "..MMM.......", "..MM........", ".MMM........",
+         ".MMM........", ".MMMM......M", "..MMMMM..MM.", "...MMMMMMM..", ".....MMM....", "............"],
+  partly: ["..S.........", "....SSS.....", ".S.SSSSS....", "..SSSSSS....", "..SSSCCC....", "..SSCCCCC...",
+           "...CCCCCCC..", "..CCCCCCCCC.", ".CCCCCCCCCCC", ".ccccccccccc", "............", "............"],
+  cloud: ["............", "............", "............", ".....CCC....", "....CCCCC...", "..CCCCCCCC..",
+          ".CCCCCCCCCC.", ".CCCCCCCCCCC", ".cccccccccc.", "............", "............", "............"],
+  rain: [...CLOUD_TOP, "............", "..R...R...R.", ".R...R...R..", "............", "...R...R...."],
+  snow: [...CLOUD_TOP, "............", "..W...W...W.", "............", "....W...W...", "............"],
+  storm: [...CLOUD_TOP.slice(0, 6), ".ccccYYcccc.", ".....YY.....", "....YYYY....", "......YY....", ".....YY.....", "....Y......."],
+  fog: ["............", "............", ".FFFFFFFF...", "............", "...FFFFFFFFF", "............",
+        ".FFFFFFFFFF.", "............", "..FFFFFFF...", "............", "............", "............"],
+};
+function codeInfo(code, isDay = 1) {
+  if (code === 0) return [isDay ? "sun" : "moon", "CLEAR"];
+  if (code <= 2) return [isDay ? "partly" : "moon", "PARTLY CLOUDY"];
+  if (code === 3) return ["cloud", "OVERCAST"];
+  if (code <= 48) return ["fog", "FOG"];
+  if (code <= 57) return ["rain", "DRIZZLE"];
+  if (code <= 67) return ["rain", "RAIN"];
+  if (code <= 77) return ["snow", "SNOW"];
+  if (code <= 82) return ["rain", "SHOWERS"];
+  if (code <= 86) return ["snow", "SNOW SHOWERS"];
+  return ["storm", "THUNDERSTORM"];
+}
+function draw(canvas, name, frame = 0) {
+  const g = canvas.getContext("2d"), grid = ICONS[name];
+  g.clearRect(0, 0, 12, 12);
+  grid.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === ".") return;
+    let yy = y;
+    if (ch === "R" || ch === "W") yy = 7 + ((y - 7 + frame) % 5);
+    if (ch === "S" && (x === 1 || x === 10 || y === 2 || y === 9) && frame % 2) return; // ray twinkle
+    g.fillStyle = COLORS[ch]; g.fillRect(x, yy, 1, 1);
+  }));
+}
+const big = document.getElementById("bigIcon");
+let bigName = "cloud", frame = 0;
+setInterval(() => { frame++; draw(big, bigName, frame); }, 450);
+
+async function load() {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
+    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+    `&timezone=${encodeURIComponent(TZ)}&forecast_days=5`;
+  try {
+    const r = await fetch(url); if (!r.ok) throw 0;
+    const d = await r.json(), c = d.current;
+    const [icon, label] = codeInfo(c.weather_code, c.is_day);
+    bigName = icon; draw(big, icon, frame);
+    document.getElementById("t").textContent = Math.round(c.temperature_2m);
+    document.getElementById("cond").textContent = label;
+    document.getElementById("meta").innerHTML =
+      `FEELS ${Math.round(c.apparent_temperature)}°<br>HUM ${c.relative_humidity_2m}%<br>WIND ${Math.round(c.wind_speed_10m)} KM/H`;
+    const days = document.getElementById("days"); days.innerHTML = "";
+    d.daily.time.forEach((iso, i) => {
+      const name = i === 0 ? "TODAY" : new Date(iso + "T12:00:00").toLocaleDateString("en-AU", { weekday: "short" }).toUpperCase();
+      const el = document.createElement("div"); el.className = "day";
+      const cv = document.createElement("canvas"); cv.width = cv.height = 12; cv.className = "pixel";
+      draw(cv, codeInfo(d.daily.weather_code[i])[0]);
+      el.innerHTML = `<span class="name">${name}</span>`;
+      el.appendChild(cv);
+      el.insertAdjacentHTML("beforeend",
+        `<span>${Math.round(d.daily.temperature_2m_max[i])}° <span class="lo">${Math.round(d.daily.temperature_2m_min[i])}°</span></span>`);
+      days.appendChild(el);
+    });
+    const t = new Date().toLocaleTimeString("en-AU", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    document.getElementById("status").textContent = `upd ${t}`;
+  } catch (e) {
+    document.getElementById("status").textContent = "no signal";
+    setTimeout(load, 60000);
+  }
+}
+load();
+setInterval(load, 15 * 60 * 1000);
+</script>
+</body>
+</html>

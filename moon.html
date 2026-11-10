@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moon Phase</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .panel { display: flex; align-items: center; gap: 18px; padding: 12px 20px; }
+  #sky { width: 120px; height: 120px; flex: none; filter: drop-shadow(0 0 10px rgba(223,227,211,.18)); }
+  .info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  #name { font-size: 30px; line-height: 1; }
+  .big { font-size: 22px; color: var(--blue); }
+  .small { font-size: 18px; color: var(--phos-dim); }
+</style>
+</head>
+<body>
+<div class="panel">
+  <canvas id="sky" class="pixel" width="48" height="48"></canvas>
+  <div class="info">
+    <span class="label">tonight's moon · southern sky</span>
+    <span id="name" class="glow">—</span>
+    <span class="big" id="illum"></span>
+    <span class="small" id="next"></span>
+  </div>
+</div>
+<script>
+const SYN = 29.530588853, DAY = 86400000;
+const REF = Date.UTC(2000, 0, 6, 18, 14);
+const SOUTH = true; // Melbourne: the lit side appears flipped vs. northern charts
+const N = 48, C = 24, R = 18;
+
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+const rand = rng(42);
+const crater = Array.from({ length: N * N }, () => 0);
+for (let i = 0; i < 9; i++) { // soft maria / craters
+  const cx = C + (rand() - .5) * 26, cy = C + (rand() - .5) * 26, cr = 2 + rand() * 5;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const d = Math.hypot(x - cx, y - cy); if (d < cr) crater[y * N + x] = Math.max(crater[y * N + x], .35 * (1 - d / cr) + .12);
+  }
+}
+const stars = Array.from({ length: 14 }, () => {
+  let x, y; do { x = Math.floor(rand() * N); y = Math.floor(rand() * N); } while (Math.hypot(x - C, y - C) < R + 3);
+  return { x, y, p: rand() * 6 };
+});
+
+function phase(now = Date.now()) {
+  const age = (((now - REF) / DAY) % SYN + SYN) % SYN;
+  const illum = (1 - Math.cos(2 * Math.PI * age / SYN)) / 2;
+  const names = [[1.84, "NEW MOON"], [5.53, "WAXING CRESCENT"], [9.22, "FIRST QUARTER"], [12.91, "WAXING GIBBOUS"],
+                 [16.61, "FULL MOON"], [20.30, "WANING GIBBOUS"], [23.99, "LAST QUARTER"], [27.68, "WANING CRESCENT"], [99, "NEW MOON"]];
+  const name = names.find(n => age < n[0])[1];
+  const toFull = ((SYN / 2 - age) + SYN) % SYN;
+  return { age, illum, name, toFull };
+}
+
+const sky = document.getElementById("sky"), g = sky.getContext("2d");
+function render(t) {
+  const { age } = phase();
+  const k = Math.cos(2 * Math.PI * age / SYN), waxing = age < SYN / 2;
+  g.clearRect(0, 0, N, N);
+  for (const s of stars) {
+    const a = .25 + .6 * (0.5 + 0.5 * Math.sin(t / 700 + s.p));
+    g.fillStyle = `rgba(201,212,220,${a.toFixed(2)})`; g.fillRect(s.x, s.y, 1, 1);
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const nx = (x + .5 - C) / R, ny = (y + .5 - C) / R;
+    if (nx * nx + ny * ny > 1) continue;
+    const half = Math.sqrt(1 - ny * ny);
+    let px = SOUTH ? -nx : nx;           // flip for the southern hemisphere view
+    const lit = waxing ? px > k * half : px < -k * half;
+    const edge = waxing ? px - k * half : -k * half - px;
+    const dither = Math.abs(edge) < .08 && ((x + y) & 1); // soft pixel terminator
+    const cr = crater[y * N + x];
+    if (lit && !dither) {
+      const v = 1 - cr;
+      g.fillStyle = `rgb(${Math.round(223 * v)},${Math.round(227 * v)},${Math.round(211 * v)})`;
+    } else {
+      g.fillStyle = dither ? "#4a5149" : `rgba(70,80,74,${(.55 - cr * .4).toFixed(2)})`; // earthshine
+    }
+    g.fillRect(x, y, 1, 1);
+  }
+  requestAnimationFrame(render);
+}
+function text() {
+  const p = phase();
+  document.getElementById("name").textContent = p.name;
+  document.getElementById("illum").textContent = `${Math.round(p.illum * 100)}% ILLUMINATED`;
+  const d = p.toFull;
+  document.getElementById("next").textContent =
+    p.name === "FULL MOON" ? "FULL MOON IS UP — LOOK OUTSIDE" : `NEXT FULL MOON IN ${d < 1.5 ? "1 DAY" : Math.round(d) + " DAYS"}`;
+}
+text(); setInterval(text, 60000);
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

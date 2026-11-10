@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Critters</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .panel { cursor: pointer; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .hint { position: absolute; top: 8px; right: 12px; z-index: 2; opacity: .7; }
+</style>
+</head>
+<body>
+<div class="panel">
+  <canvas id="c" class="pixel"></canvas>
+  <span class="label hint">click: drop a treat</span>
+</div>
+<script>
+const PAL = {
+  k:"#0e1110", w:"#d9a066", o:"#a8743f", p:"#e8a3a3", e:"#0e1110",
+  d:"#cbb99e", b:"#8a6f52", n:"#2a2a2a",
+  y:"#e6cf6b", O:"#d98b4a",
+  s:"#e0b48c", h:"#2f2f2f", r:"#c9584c", g:"#a9c7a1", B:"#4b5a6a",
+};
+const S = {
+  cat: {
+    body: ["...........k...k","...........kk.kk","k..........kwwwk","kk.........kewek",".kk.kkkkkkkkwpwk",
+           "..kkwwowwowwwwk.","...kwwowwowwwk..","...kwwwwwwwwwk.."],
+    legs: [["...kwk.kk..kwk..","...kk......kk..."], ["....kwk..kwk....","....kk...kk....."]],
+    sit:  ["...........k...k","...........kk.kk","...........kwwwk","...........kewek","........kkkkwpwk",
+           ".......kwwowwwk.","..kk..kwwowwwk..","...kkkwwwwwwwk..","....kkwwwwwwwk..","......kkkkkkk..."],
+    sleep:["................","................","................","................","..........k..k..",
+           "...kkkkkkkkwkkwk","..kwwowwowwwwwwk",".kkwwowwowwkwwwk","kk.kwwwwwwwwwwk.","....kkkkkkkkkk.."],
+  },
+  dog: {
+    body: ["..........kkk...",".........kdddk..",".........kdedkk.","k........kbdddnk","kk.......kbdddk.",
+           ".kkkkkkkkkddkk..","..kddddddddk....","..kddddddddk...."],
+    legs: [["..kdk..kdk.kdk..","..kk...kk..kk..."], ["...kdk..kdkkdk..","...kk...kk.kk..."]],
+  },
+  chick: {
+    body: ["..kkk...",".kyyyk..",".kyeykO.","kyyyyk..","kyyyyk..",".kyyk..."],
+    legs: [["..O.O..."], ["...OO..."]],
+  },
+  runner: {
+    body: ["...khhk...","..khhhhk..","..rrrrrr..","..kssses..","...ksssk..","...kggk...","..kggggk..",".s.kggk.s.","...kBBk..."],
+    legs: [["..kB..Bk..",".kB....Bk.",".s......s."], ["...kBBk...","....Bs....","...ss....."]],
+  },
+};
+const cv = document.getElementById("c"), g = cv.getContext("2d");
+let W = 0, H = 0, PX = 3, GROUND = 0;
+function resize() {
+  PX = Math.max(2, Math.floor(innerHeight / 36));
+  W = Math.ceil(innerWidth / PX); H = Math.ceil(innerHeight / PX);
+  cv.width = W; cv.height = H; GROUND = H - 5;
+  makeScenery();
+}
+let stars = [], tufts = [];
+function makeScenery() {
+  stars = Array.from({ length: Math.floor(W / 8) }, () => ({ x: Math.random() * W | 0, y: Math.random() * (GROUND - 14) | 0, p: Math.random() * 6 }));
+  tufts = Array.from({ length: Math.floor(W / 6) }, () => ({ x: Math.random() * W | 0, f: Math.random() < .15 ? (Math.random() < .5 ? "#d6b77a" : "#c9a3c9") : null }));
+}
+function blit(rows, x, y, flip) {
+  const w = rows[0].length;
+  rows.forEach((row, j) => [...row].forEach((ch, i) => {
+    if (ch === ".") return;
+    g.fillStyle = PAL[ch];
+    g.fillRect(Math.round(x + (flip ? w - 1 - i : i)), Math.round(y + j), 1, 1);
+  }));
+}
+const rnd = (a, b) => a + Math.random() * (b - a);
+class Critter {
+  constructor(kind, speed) {
+    this.kind = kind; this.sp = speed; this.x = rnd(10, Math.max(20, W - 30)); this.dir = Math.random() < .5 ? 1 : -1;
+    this.state = "walk"; this.t = rnd(2, 6); this.frame = 0; this.ft = 0; this.target = null; this.hop = 0;
+  }
+  get width() { return S[this.kind].body[0].length; }
+  update(dt) {
+    this.t -= dt;
+    if (this.target != null) {
+      this.state = "walk"; this.dir = this.target > this.x + this.width / 2 ? 1 : -1;
+      if (Math.abs(this.target - (this.x + this.width / 2)) < 2) { eat(this); this.target = null; this.state = "idle"; this.t = 2; }
+    } else if (this.t <= 0) {
+      const opts = this.kind === "cat" ? ["walk", "walk", "idle", "sit", "sleep"] : ["walk", "walk", "idle"];
+      this.state = opts[Math.random() * opts.length | 0];
+      this.t = this.state === "sleep" ? rnd(8, 16) : rnd(2, 7);
+      if (Math.random() < .3) this.dir *= -1;
+    }
+    if (this.state === "walk") {
+      this.x += this.dir * this.sp * (this.target != null ? 1.8 : 1) * dt;
+      if (this.x < 1) { this.x = 1; this.dir = 1; }
+      if (this.x > W - this.width - 1) { this.x = W - this.width - 1; this.dir = -1; }
+      this.ft += dt; if (this.ft > .22) { this.ft = 0; this.frame ^= 1; }
+    }
+    if (this.kind === "chick" && this.state === "idle" && Math.random() < dt * .8) this.hop = 1;
+    this.hop = Math.max(0, this.hop - dt * 3);
+  }
+  draw(t) {
+    const sp = S[this.kind], flip = this.dir < 0;
+    if (this.state === "sit" && sp.sit) return blit(sp.sit, this.x, GROUND - sp.sit.length, flip);
+    if (this.state === "sleep" && sp.sleep) {
+      blit(sp.sleep, this.x, GROUND - sp.sleep.length, flip);
+      const zt = (t / 900) % 3;
+      g.fillStyle = "#8ea6b6";
+      for (let i = 0; i < 2; i++) { const k = (zt + i * 1.5) % 3; drawZ(this.x + (flip ? 2 : 12) + k * 2, GROUND - 10 - k * 3); }
+      return;
+    }
+    const rows = [...sp.body, ...sp.legs[this.state === "walk" ? this.frame : 0]];
+    const lift = Math.sin(this.hop * Math.PI) * 3;
+    blit(rows, this.x, GROUND - rows.length - lift, flip);
+  }
+}
+function drawZ(x, y) { x = Math.round(x); y = Math.round(y); g.fillRect(x, y, 4, 1); g.fillRect(x + 2, y + 1, 1, 1); g.fillRect(x + 1, y + 2, 1, 1); g.fillRect(x, y + 3, 4, 1); }
+
+let crew = [], runner = null, nextRun = rnd(6, 12), treats = [], hearts = [], dust = [];
+function eat(c) { treats = treats.filter(tr => Math.abs(tr.x - (c.x + c.width / 2)) > 4); hearts.push({ x: c.x + c.width / 2, y: GROUND - 14, a: 1 }); }
+cv.parentElement.addEventListener("click", e => {
+  const x = e.clientX / PX; treats.push({ x, y: 0, vy: 0 });
+  const free = crew.filter(c => c.target == null).sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x))[0];
+  if (free) { free.target = x; if (free.state === "sleep") free.state = "walk"; }
+});
+function startRun() { runner = { x: -12, frame: 0, ft: 0 }; crew.forEach(c => { if (c.state !== "sleep") c.alert = 1.2; }); }
+
+let last = performance.now();
+function loop(t) {
+  const dt = Math.min(.05, (t - last) / 1000); last = t;
+  g.clearRect(0, 0, W, H);
+  for (const s of stars) { g.fillStyle = `rgba(201,212,220,${(.15 + .45 * (0.5 + 0.5 * Math.sin(t / 800 + s.p))).toFixed(2)})`; g.fillRect(s.x, s.y, 1, 1); }
+  g.fillStyle = "#26302a"; g.fillRect(0, GROUND, W, H - GROUND);
+  g.fillStyle = "#3c4d40"; g.fillRect(0, GROUND, W, 1);
+  for (const tf of tufts) {
+    g.fillStyle = "#5d7562"; g.fillRect(tf.x, GROUND - 1, 1, 1); g.fillRect(tf.x + 2, GROUND - 1, 1, 1); g.fillRect(tf.x + 1, GROUND - 2, 1, 1);
+    if (tf.f) { g.fillStyle = tf.f; g.fillRect(tf.x + 1, GROUND - 3, 1, 1); }
+  }
+  for (const tr of treats) { tr.vy += 120 * dt; tr.y = Math.min(GROUND - 2, tr.y + tr.vy * dt); g.fillStyle = "#d6b77a"; g.fillRect(tr.x | 0, tr.y | 0, 2, 2); }
+  crew.forEach(c => { c.update(dt); c.draw(t); if (c.alert > 0) { c.alert -= dt; g.fillStyle = "#d6b77a"; const ax = Math.round(c.x + c.width / 2), ay = GROUND - S[c.kind].body.length - 7; g.fillRect(ax, ay, 1, 3); g.fillRect(ax, ay + 4, 1, 1); } });
+  nextRun -= dt;
+  if (!runner && nextRun <= 0) startRun();
+  if (runner) {
+    runner.x += 70 * dt; runner.ft += dt; if (runner.ft > .09) { runner.ft = 0; runner.frame ^= 1; }
+    if (Math.random() < dt * 25) dust.push({ x: runner.x + 1, y: GROUND - 1, a: 1 });
+    const sp = S.runner; blit([...sp.body, ...sp.legs[runner.frame]], runner.x, GROUND - 12, false);
+    g.fillStyle = "rgba(169,199,161,.35)"; for (let i = 0; i < 3; i++) g.fillRect(Math.round(runner.x - 4 - i * 3), GROUND - 9 + i * 2, 2, 1);
+    if (runner.x > W + 12) { runner = null; nextRun = rnd(25, 45); }
+  }
+  dust = dust.filter(d => (d.a -= dt * 2) > 0); dust.forEach(d => { g.fillStyle = `rgba(160,170,160,${d.a.toFixed(2)})`; g.fillRect(Math.round(d.x - (1 - d.a) * 4), Math.round(d.y - (1 - d.a) * 2), 1, 1); });
+  hearts = hearts.filter(h => (h.a -= dt * .7) > 0);
+  hearts.forEach(h => { h.y -= dt * 6; g.fillStyle = `rgba(232,163,163,${h.a.toFixed(2)})`; const x = Math.round(h.x), y = Math.round(h.y);
+    g.fillRect(x - 2, y, 2, 1); g.fillRect(x + 1, y, 2, 1); g.fillRect(x - 2, y + 1, 5, 1); g.fillRect(x - 1, y + 2, 3, 1); g.fillRect(x, y + 3, 1, 1); });
+  requestAnimationFrame(loop);
+}
+resize();
+crew = [new Critter("cat", 9), new Critter("dog", 12), new Critter("chick", 6)];
+addEventListener("resize", resize);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

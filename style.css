@@ -1,0 +1,46 @@
+:root {
+  --bg: #151916;
+  --panel: #1b201c;
+  --edge: #2a322c;
+  --phos: #a9c7a1;      /* sage phosphor */
+  --phos-dim: #5d7562;
+  --ghost: #232a25;
+  --blue: #8ea6b6;      /* blue-gray accent */
+  --amber: #d6b77a;
+  --text-glow: 0 0 6px rgba(169, 199, 161, .35);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); overflow: hidden; }
+body {
+  color: var(--phos);
+  font-family: "VT323", ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+}
+.panel {
+  position: relative;
+  height: 100%;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(169,199,161,.06), transparent 70%),
+    var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  overflow: hidden;
+}
+/* CRT scanlines */
+.panel::after {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+.label {
+  font-family: "Press Start 2P", monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--phos-dim);
+  text-transform: uppercase;
+}
+.glow { text-shadow: var(--text-glow); }
+canvas.pixel { image-rendering: pixelated; image-rendering: crisp-edges; }
